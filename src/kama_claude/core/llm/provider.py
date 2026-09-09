@@ -33,6 +33,10 @@ class AnthropicProvider:
         else:
             self._client = client
         self._model = model
+        base_url = os.environ.get("ANTHROPIC_BASE_URL", "")
+        self._stream_broken = client is None and (
+            "127.0.0.1" in base_url or "localhost" in base_url
+        )
 
     # 流式调用 Anthropic API，逐 token 发布事件并返回 LlmResponse
     async def chat(
@@ -67,11 +71,34 @@ class AnthropicProvider:
 
         text_parts: list[str] = []
 
-        async with self._client.messages.stream(**kwargs) as stream:
-            async for text in stream.text_stream:
-                await bus.publish(LlmTokenEvent(run_id=run_id, token=text, ts=_now()))
-                text_parts.append(text)
-            final_message = await stream.get_final_message()
+        if self._stream_broken:
+            final_message = await self._client.messages.create(**kwargs)
+            for block in final_message.content:
+                if block.type == "text":
+                    text_parts.append(block.text)
+                    await bus.publish(
+                        LlmTokenEvent(run_id=run_id, token=block.text, ts=_now())
+                    )
+        else:
+            try:
+                async with self._client.messages.stream(**kwargs) as stream:
+                    async for text in stream.text_stream:
+                        await bus.publish(LlmTokenEvent(run_id=run_id, token=text, ts=_now()))
+                        text_parts.append(text)
+                    final_message = await stream.get_final_message()
+            except AttributeError as exc:
+                # Some OpenAI-compatible gateways omit "content" from message_start.
+                if "'NoneType' object has no attribute 'append'" not in str(exc):
+                    raise
+                self._stream_broken = True
+                final_message = await self._client.messages.create(**kwargs)
+                text_parts = []
+                for block in final_message.content:
+                    if block.type == "text":
+                        text_parts.append(block.text)
+                        await bus.publish(
+                            LlmTokenEvent(run_id=run_id, token=block.text, ts=_now())
+                        )
 
         usage = final_message.usage
         cache_read: int = getattr(usage, "cache_read_input_tokens", 0) or 0
