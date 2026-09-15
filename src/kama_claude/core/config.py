@@ -34,6 +34,7 @@ class AgentConfig:
 @dataclass
 class LlmConfig:
     default_model: str = _DEFAULT_MODEL
+    provider: str = "anthropic"  # "anthropic" | "openai"
     router: str = "static"  # "static" | "rule_based" (S4) | "cost_budget" (S6)
 
 
@@ -130,7 +131,11 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
         llm = data["llm"]
         if not isinstance(llm, dict):
             raise SystemExit("Config error: [llm] must be a table")
-        unknown_llm: set[str] = set(llm.keys()) - {"default_model", "router"}
+        unknown_llm: set[str] = set(llm.keys()) - {
+            "default_model",
+            "provider",
+            "router",
+        }
         if unknown_llm:
             raise SystemExit(f"Unknown [llm] keys: {', '.join(sorted(unknown_llm))}")
         if "default_model" in llm:
@@ -138,6 +143,11 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
             if not isinstance(val, str):
                 raise SystemExit("Config error: llm.default_model must be a string")
             config.llm.default_model = val
+        if "provider" in llm:
+            val = llm["provider"]
+            if not isinstance(val, str):
+                raise SystemExit("Config error: llm.provider must be a string")
+            config.llm.provider = val
         if "router" in llm:
             val = llm["router"]
             if not isinstance(val, str):
@@ -211,6 +221,10 @@ def _apply_env(config: KamaConfig) -> None:
     default_model = os.environ.get("KAMA_LLM_DEFAULT_MODEL")
     if default_model is not None:
         config.llm.default_model = default_model
+
+    provider = os.environ.get("KAMA_LLM_PROVIDER")
+    if provider is not None:
+        config.llm.provider = provider
 
     trace_enabled = os.environ.get("KAMA_TRACE_ENABLED")
     if trace_enabled is not None:

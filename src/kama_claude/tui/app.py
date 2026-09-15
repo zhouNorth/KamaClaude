@@ -165,13 +165,17 @@ class KamaTuiApp(App[None]):
             try:
                 await client.connect()
             except (ConnectionRefusedError, OSError):
-                header.update("[bold]KamaClaude[/bold]  [red]not connected — retrying...[/red]")
+                header.update(
+                    "[bold]KamaClaude[/bold]  "
+                    "[red]not connected — retrying...[/red]  [dim]q quit[/dim]"
+                )
                 await asyncio.sleep(2)
                 continue
 
             self._client = client
             header.update(
-                f"[bold]KamaClaude[/bold]  [dim]{self._host}:{self._port}[/dim]"
+                f"[bold]KamaClaude[/bold]  [dim]{self._host}:{self._port}"
+                "  · waiting for events  · q quit[/dim]"
             )
             loop_task = asyncio.create_task(client.run_event_loop())
 
@@ -198,7 +202,10 @@ class KamaTuiApp(App[None]):
                 self._break_llm()
                 await client.close()
 
-            header.update("[bold]KamaClaude[/bold]  [dim]disconnected — retrying...[/dim]")
+            header.update(
+                "[bold]KamaClaude[/bold]  "
+                "[dim]disconnected — retrying...  · q quit[/dim]"
+            )
             await asyncio.sleep(2)
 
     # 根据事件 type 路由到对应渲染逻辑

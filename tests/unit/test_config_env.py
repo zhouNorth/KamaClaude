@@ -85,3 +85,14 @@ def test_priority_chain_full(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     cfg = get_config()
 
     assert cfg.port == 8000
+
+
+def test_llm_provider_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    env_file = tmp_path / ".env"
+    _write_env(env_file, "KAMA_LLM_PROVIDER=openai\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("KAMA_LLM_PROVIDER", raising=False)
+
+    cfg = get_config()
+
+    assert cfg.llm.provider == "openai"

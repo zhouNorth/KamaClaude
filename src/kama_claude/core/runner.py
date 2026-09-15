@@ -11,6 +11,7 @@ from kama_claude.core.context import ExecutionContext
 from kama_claude.core.events.bus import EventBus, EventHandler
 from kama_claude.core.events.writer import EventWriter
 from kama_claude.core.llm.base import LLMProvider
+from kama_claude.core.llm.openai_provider import OpenAIProvider
 from kama_claude.core.llm.provider import AnthropicProvider
 from kama_claude.core.loop import AgentLoop
 from kama_claude.core.runs import RUNS_DIR, new_run_id
@@ -101,9 +102,7 @@ class AgentRunner:
             writer.subscribe(bus)
             await bus.publish(RunStartedEvent(run_id=run_id, goal=goal, ts=_now()))
 
-            provider: LLMProvider = self._provider or AnthropicProvider(
-                self._config.llm.default_model
-            )
+            provider: LLMProvider = self._provider or self._build_llm_provider()
             if self._trace is not None:
                 provider = TracingProvider(
                     provider,
@@ -139,3 +138,10 @@ class AgentRunner:
             result=context.result,
             reason=context.reason,
         )
+
+    def _build_llm_provider(self) -> LLMProvider:
+        if self._config.llm.provider == "openai":
+            return OpenAIProvider(self._config.llm.default_model)
+        if self._config.llm.provider == "anthropic":
+            return AnthropicProvider(self._config.llm.default_model)
+        raise SystemExit(f"Unsupported LLM provider: {self._config.llm.provider}")

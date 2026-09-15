@@ -9,6 +9,7 @@ import signal
 import time
 from datetime import UTC
 from pathlib import Path
+from types import FrameType
 from typing import Any
 
 from pydantic import BaseModel
@@ -37,6 +38,28 @@ logger = logging.getLogger(__name__)
 
 def _now() -> str:
     return datetime.datetime.now(UTC).isoformat()
+
+
+def _install_signal_handlers(
+    loop: asyncio.AbstractEventLoop,
+    shutdown: asyncio.Event,
+) -> None:
+    try:
+        loop.add_signal_handler(signal.SIGINT, shutdown.set)
+        loop.add_signal_handler(signal.SIGTERM, shutdown.set)
+        return
+    except NotImplementedError:
+        # Windows 的 ProactorEventLoop 不支持 add_signal_handler。
+        pass
+
+    def _on_signal(signum: int, frame: FrameType | None) -> None:
+        loop.call_soon_threadsafe(shutdown.set)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, _on_signal)
+        except (ValueError, OSError):
+            logger.debug("cannot install signal handler for %s", sig)
 
 
 class CoreApp:
@@ -160,19 +183,19 @@ class CoreApp:
 
         loop = asyncio.get_running_loop()
         shutdown = asyncio.Event()
-        loop.add_signal_handler(signal.SIGINT, shutdown.set)
-        loop.add_signal_handler(signal.SIGTERM, shutdown.set)
+        _install_signal_handlers(loop, shutdown)
 
-        await shutdown.wait()
-
-        logger.info("shutting down")
-        for run_task in list(self._running_runs):
-            run_task.cancel()
-        if self._running_runs:
-            await asyncio.gather(*self._running_runs, return_exceptions=True)
-        await server.stop()
-        if self._trace is not None:
-            await self._trace.stop()
+        try:
+            await shutdown.wait()
+        finally:
+            logger.info("shutting down")
+            for run_task in list(self._running_runs):
+                run_task.cancel()
+            if self._running_runs:
+                await asyncio.gather(*self._running_runs, return_exceptions=True)
+            await server.stop()
+            if self._trace is not None:
+                await self._trace.stop()
 
 
 # 同步入口：启动 CoreApp 事件循环

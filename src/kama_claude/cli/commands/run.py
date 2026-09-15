@@ -44,11 +44,11 @@ class StdoutPrinter:
             print(f"[tool] {event.get('tool_name', '')} {params_str}")
 
         elif t == "tool.call_finished":
-            print(f"[tool] {event.get('tool_name', '')} ✓  {event.get('elapsed_ms')}ms")
+            print(f"[tool] {event.get('tool_name', '')} [ok] {event.get('elapsed_ms')}ms")
 
         elif t == "tool.call_failed":
             print(
-                f"[tool] {event.get('tool_name', '')} ✗  {event.get('error_message', '')}",
+                f"[tool] {event.get('tool_name', '')} [failed] {event.get('error_message', '')}",
                 file=sys.stderr,
             )
 
@@ -77,11 +77,13 @@ async def _run_async(goal: str, config: KamaConfig) -> int:
 
     async def on_event(event: dict[str, Any]) -> None:
         nonlocal exit_code
-        await printer.handle(event)
-        if event.get("type") == "run.finished":
-            if event.get("status") != "success":
-                exit_code = 1
-            finished.set()
+        try:
+            await printer.handle(event)
+        finally:
+            if event.get("type") == "run.finished":
+                if event.get("status") != "success":
+                    exit_code = 1
+                finished.set()
 
     client.on_event(on_event)
     loop_task = asyncio.create_task(client.run_event_loop())
@@ -115,6 +117,11 @@ async def _run_async(goal: str, config: KamaConfig) -> int:
 
 # 执行 kama run --goal "..." 命令
 def cmd_run(goal: str, config: KamaConfig) -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     try:
         exit_code = asyncio.run(_run_async(goal, config))
     except KeyboardInterrupt:
