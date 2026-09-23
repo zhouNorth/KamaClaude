@@ -86,7 +86,10 @@ class SocketServer:
         if self._server is None:
             return
         self._server.close()
-        await asyncio.wait_for(self._server.wait_closed(), timeout=2.0)
+        try:
+            await asyncio.wait_for(self._server.wait_closed(), timeout=2.0)
+        except TimeoutError:
+            logger.warning("timed out waiting for socket server to close")
 
     # 处理单个客户端连接，完成后关闭写流
     async def _handle_connection(

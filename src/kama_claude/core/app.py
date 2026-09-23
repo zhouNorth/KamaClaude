@@ -52,6 +52,24 @@ def _now() -> str:
     return datetime.datetime.now(UTC).isoformat()
 
 
+def _install_signal_handlers(
+    loop: asyncio.AbstractEventLoop,
+    shutdown: asyncio.Event,
+) -> None:
+    """Install SIGINT/SIGTERM handlers on Unix and Windows event loops."""
+
+    def request_shutdown(*_args: object) -> None:
+        loop.call_soon_threadsafe(shutdown.set)
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, request_shutdown)
+        loop.add_signal_handler(signal.SIGTERM, request_shutdown)
+    except NotImplementedError:
+        # Windows ProactorEventLoop does not implement add_signal_handler().
+        signal.signal(signal.SIGINT, request_shutdown)
+        signal.signal(signal.SIGTERM, request_shutdown)
+
+
 class CoreApp:
     def __init__(self) -> None:
         self._start_time = time.monotonic()
@@ -249,8 +267,7 @@ class CoreApp:
 
         loop = asyncio.get_running_loop()
         shutdown = asyncio.Event()
-        loop.add_signal_handler(signal.SIGINT, shutdown.set)
-        loop.add_signal_handler(signal.SIGTERM, shutdown.set)
+        _install_signal_handlers(loop, shutdown)
 
         await shutdown.wait()
 
