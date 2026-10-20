@@ -51,25 +51,39 @@ class PermissionConfig:
 
 @dataclass
 class CompactionConfig:
-    auto_threshold: float = 0.0    # context_pct 触发自动压缩的阈值（0 表示禁用，推荐用手动 /compact）
+    auto_threshold: float = 0.0  # context_pct 触发自动压缩的阈值（0 表示禁用，推荐用手动 /compact）
     tool_result_limit: int = 8_000  # tool_result 截断触发字符数
-    tool_result_keep: int = 4_000   # 截断后保留的前缀字符数
+    tool_result_keep: int = 4_000  # 截断后保留的前缀字符数
 
 
 @dataclass
 class McpServerConfig:
     name: str
-    transport: str = "stdio"       # "stdio" | "tcp"
-    command: str = ""              # stdio 专用：可执行文件路径
+    transport: str = "stdio"  # "stdio" | "tcp"
+    command: str = ""  # stdio 专用：可执行文件路径
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
-    host: str = "localhost"        # tcp 专用
-    port: int = 3000               # tcp 专用
+    host: str = "localhost"  # tcp 专用
+    port: int = 3000  # tcp 专用
 
 
 @dataclass
 class McpConfig:
     servers: list[McpServerConfig] = field(default_factory=list)
+
+
+@dataclass
+class RagConfig:
+    backend: str = "sqlite"
+    index_path: str = "~/.kama/rag/index.sqlite3"
+    chroma_path: str = "~/.kama/rag/chroma"
+    collection_name: str = "project_docs_v1"
+    result_max_chars: int = 12000
+    chunk_chars: int = 1200
+    overlap_chars: int = 200
+    embedding_url: str = ""
+    embedding_model: str = ""
+    embedding_api_key_env: str = ""
 
 
 @dataclass
@@ -83,6 +97,7 @@ class KamaConfig:
     permission: PermissionConfig = field(default_factory=PermissionConfig)
     compaction: CompactionConfig = field(default_factory=CompactionConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
+    rag: RagConfig = field(default_factory=RagConfig)
 
 
 # 构建并返回运行时配置：默认值 → 全局 TOML → 项目本地 TOML → .env → 系统环境变量（后者优先级最高）
@@ -117,7 +132,17 @@ def get_config() -> KamaConfig:
 
 # 将已解析的 TOML 根表写入 config；未知小节或类型错误时退出进程
 def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
-    unknown = set(data.keys()) - {"core", "logging", "agent", "llm", "trace", "permission", "compaction", "mcp"}
+    unknown = set(data.keys()) - {
+        "core",
+        "logging",
+        "agent",
+        "llm",
+        "trace",
+        "permission",
+        "compaction",
+        "mcp",
+        "rag",
+    }
     if unknown:
         raise SystemExit(f"Unknown top-level config keys: {', '.join(sorted(unknown))}")
 
@@ -224,7 +249,11 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
         comp = data["compaction"]
         if not isinstance(comp, dict):
             raise SystemExit("Config error: [compaction] must be a table")
-        unknown_comp: set[str] = set(comp.keys()) - {"auto_threshold", "tool_result_limit", "tool_result_keep"}
+        unknown_comp: set[str] = set(comp.keys()) - {
+            "auto_threshold",
+            "tool_result_limit",
+            "tool_result_keep",
+        }
         if unknown_comp:
             raise SystemExit(f"Unknown [compaction] keys: {', '.join(sorted(unknown_comp))}")
         if "auto_threshold" in comp:
@@ -235,12 +264,16 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
         if "tool_result_limit" in comp:
             val = comp["tool_result_limit"]
             if not isinstance(val, int) or val <= 0:
-                raise SystemExit("Config error: compaction.tool_result_limit must be a positive integer")
+                raise SystemExit(
+                    "Config error: compaction.tool_result_limit must be a positive integer"
+                )
             config.compaction.tool_result_limit = val
         if "tool_result_keep" in comp:
             val = comp["tool_result_keep"]
             if not isinstance(val, int) or val <= 0:
-                raise SystemExit("Config error: compaction.tool_result_keep must be a positive integer")
+                raise SystemExit(
+                    "Config error: compaction.tool_result_keep must be a positive integer"
+                )
             config.compaction.tool_result_keep = val
 
     if "mcp" in data:
@@ -261,7 +294,9 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
                 raise SystemExit(f"Config error: mcp.servers[{i}].name must be a non-empty string")
             transport = srv.get("transport", "stdio")
             if transport not in ("stdio", "tcp"):
-                raise SystemExit(f"Config error: mcp.servers[{i}].transport must be 'stdio' or 'tcp'")
+                raise SystemExit(
+                    f"Config error: mcp.servers[{i}].transport must be 'stdio' or 'tcp'"
+                )
             s = McpServerConfig(name=name, transport=transport)
             if "command" in srv:
                 val = srv["command"]
@@ -289,6 +324,49 @@ def _apply_toml(config: KamaConfig, data: dict[str, Any]) -> None:
                     raise SystemExit(f"Config error: mcp.servers[{i}].port must be an integer")
                 s.port = val
             config.mcp.servers.append(s)
+
+    if "rag" in data:
+        rag = data["rag"]
+        if not isinstance(rag, dict):
+            raise SystemExit("Config error: [rag] must be a table")
+        unknown_rag = set(rag) - {
+            "backend", "chroma_path", "collection_name", "result_max_chars",
+            "index_path",
+            "chunk_chars",
+            "overlap_chars",
+            "embedding_url",
+            "embedding_model",
+            "embedding_api_key_env",
+        }
+        if unknown_rag:
+            raise SystemExit(f"Unknown [rag] keys: {', '.join(sorted(unknown_rag))}")
+        for key in (
+            "backend", "chroma_path", "collection_name", "index_path",
+            "embedding_url", "embedding_model", "embedding_api_key_env",
+        ):
+            if key in rag:
+                if not isinstance(rag[key], str):
+                    raise SystemExit(f"Config error: rag.{key} must be a string")
+                setattr(config.rag, key, rag[key])
+        for key in ("chunk_chars", "overlap_chars", "result_max_chars"):
+            if key in rag:
+                if not isinstance(rag[key], int) or isinstance(rag[key], bool) or rag[key] < 0:
+                    raise SystemExit(f"Config error: rag.{key} must be a non-negative integer")
+                setattr(config.rag, key, rag[key])
+        if config.rag.backend not in {"sqlite", "chroma"}:
+            raise SystemExit("Config error: rag.backend must be 'sqlite' or 'chroma'")
+        if not config.rag.chroma_path or not config.rag.collection_name:
+            raise SystemExit("Config error: rag.chroma_path and collection_name must be non-empty")
+        if config.rag.result_max_chars < 256:
+            raise SystemExit("Config error: rag.result_max_chars must be at least 256")
+        if not config.rag.index_path or config.rag.chunk_chars < 1:
+            raise SystemExit("Config error: rag.index_path and rag.chunk_chars must be non-empty")
+        if config.rag.overlap_chars >= config.rag.chunk_chars:
+            raise SystemExit("Config error: rag.overlap_chars must be less than chunk_chars")
+        if bool(config.rag.embedding_url) != bool(config.rag.embedding_model):
+            raise SystemExit(
+                "Config error: rag.embedding_url and embedding_model must be set together"
+            )
 
 
 # 用 KAMA_* 环境变量覆盖 config 中对应字段（若变量已设置）

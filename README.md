@@ -33,4 +33,5 @@ uv run kama --version       # 应输出 0.0.1
 ## 文档
 
 - **[RUNBOOK.md](./RUNBOOK.md)** — 完整操作参考：配置、开发命令、故障排查
+- **[RAG.md](./RAG.md)** — Chroma 索引、外接 MCP 与知识库问答
 - **[WIRE_PROTOCOL.md](./WIRE_PROTOCOL.md)** — IPC 协议定义（由代码生成，勿手动编辑）

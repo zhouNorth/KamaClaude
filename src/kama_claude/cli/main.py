@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
+from pathlib import Path
+
+import httpx
 
 from kama_claude.cli.commands.chat import cmd_chat
 from kama_claude.cli.commands.core import cmd_core_start, cmd_core_status, cmd_core_stop
@@ -11,6 +15,7 @@ from kama_claude.cli.commands.trace import cmd_trace
 from kama_claude.cli.commands.version import cmd_version
 from kama_claude.core.config import get_config
 from kama_claude.core.logging_setup import setup_logging
+from kama_claude.core.rag.factory import create_index, format_hits
 
 
 # CLI 主入口：解析命令行参数并分发到对应子命令
@@ -24,6 +29,16 @@ def main() -> None:
 
     run_parser = subparsers.add_parser("run", help="Run an agent task")
     run_parser.add_argument("--goal", required=True, help="Goal for the agent to accomplish")
+
+    rag_parser = subparsers.add_parser("rag", help="Index and search the local knowledge base")
+    rag_sub = rag_parser.add_subparsers(dest="rag_command")
+    rag_index = rag_sub.add_parser(
+        "index", help="Index a directory of Markdown, text, RST and Python files"
+    )
+    rag_index.add_argument("path", type=Path)
+    rag_search = rag_sub.add_parser("search", help="Search indexed passages without an LLM")
+    rag_search.add_argument("query")
+    rag_search.add_argument("--top-k", type=int, default=5)
 
     core_parser = subparsers.add_parser("core", help="Manage the core daemon")
     core_sub = core_parser.add_subparsers(dest="core_command")
@@ -53,6 +68,22 @@ def main() -> None:
         cmd_chat(config)
     elif args.command == "run":
         cmd_run(args.goal, config)
+    elif args.command == "rag":
+        index = create_index(config.rag)
+        try:
+            if args.rag_command == "index":
+                changed, skipped = index.index_directory(args.path)
+                print(f"Indexed {changed} file(s); unchanged/skipped {skipped}.")
+            elif args.rag_command == "search":
+                print(
+                    format_hits(index.search(args.query, args.top_k), config.rag.result_max_chars)
+                )
+            else:
+                rag_parser.print_help()
+                sys.exit(1)
+        except (OSError, ValueError, sqlite3.Error, httpx.HTTPError, KeyError) as exc:
+            print(f"RAG error: {exc}", file=sys.stderr)
+            sys.exit(1)
     elif args.command == "core":
         if args.core_command == "start":
             cmd_core_start(config)

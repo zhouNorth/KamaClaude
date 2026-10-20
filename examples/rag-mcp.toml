@@ -1,0 +1,23 @@
+# Windows 示例：在其他机器上将 command 替换为自己的虚拟环境 Python 绝对路径。
+[rag]
+backend = "chroma"
+chroma_path = "F:/KamaClaude/KamaClaude/.kama/chroma"
+collection_name = "project_docs_v1"
+chunk_chars = 1200
+overlap_chars = 200
+result_max_chars = 12000
+
+# 留空时使用 Chroma 的本地 all-MiniLM-L6-v2，首次索引会下载模型。
+# 中文知识库建议配置适合中文的 embedding 服务，并更换 collection_name 重建。
+# embedding_url = "http://127.0.0.1:8000/v1/embeddings"
+# embedding_model = "your-embedding-model"
+# embedding_api_key_env = "RAG_EMBEDDING_API_KEY"
+
+[[mcp.servers]]
+name = "knowledge"
+transport = "stdio"
+command = "F:/KamaClaude/KamaClaude/.venv/Scripts/python.exe"
+args = ["-m", "kama_claude.core.rag.mcp_server"]
+
+[mcp.servers.env]
+PYTHONIOENCODING = "utf-8"

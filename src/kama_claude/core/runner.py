@@ -18,6 +18,8 @@ from kama_claude.core.loop import AgentLoop
 from kama_claude.core.mcp.server import McpServerManager
 from kama_claude.core.memory.loader import load_context_file
 from kama_claude.core.permissions.manager import PermissionManager
+from kama_claude.core.rag.factory import create_index
+from kama_claude.core.rag.tool import RagSearchTool
 from kama_claude.core.runs import RUNS_DIR, new_run_id
 from kama_claude.core.session.model import Session
 from kama_claude.core.session.store import SessionStore
@@ -99,6 +101,8 @@ class AgentRunner:
         for t in [ReadFileTool(), BashTool(), WriteFileTool(), ListDirTool()]:
             if _ok(t.name):
                 registry.register(t)
+        if _ok("rag_search"):
+            registry.register(RagSearchTool(create_index(self._config.rag)))
         for t in [
             TaskCreateTool(task_manager),
             TaskUpdateTool(task_manager),

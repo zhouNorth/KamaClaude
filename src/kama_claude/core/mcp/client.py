@@ -97,7 +97,10 @@ class McpClient:
         for item in response.get("content", []):
             if item.get("type") == "text":
                 parts.append(str(item["text"]))
-        return "\n".join(parts)
+        text = "\n".join(parts)
+        if response.get("isError"):
+            raise McpToolError(text or f"MCP tool '{name}' failed")
+        return text
 
     # 后台任务：持续读取 stderr 并记录日志，防止管道缓冲区满
     async def _drain_stderr(self) -> None:
