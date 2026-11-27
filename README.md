@@ -4,7 +4,7 @@ KamaClaude 是一个用 Python 3.12 和 asyncio 实现的本地 AI Agent 项目�
 
 **[下载《KamaClaude 项目源码学习笔记》（Word，17 页）](./docs/KamaClaude-Study-Notes.docx)**
 
-笔记从一次 `kama ping` 开始，沿着实际代码追踪请求和响应，再用“总结 README”和“编写回文函数”两个案例讲解单 Agent 执行与多 Agent 协作。文中保留了函数名、参数说明和源码路径。当前仓库收录项目介绍与学习笔记。
+笔记从一次 `kama ping` 开始，沿着实际代码追踪请求和响应，再用“总结 README”和“编写回文函数”两个案例讲解单 Agent 执行与多 Agent 协作。文中保留了函数名、参数说明和源码路径。main 分支包含完整源码、测试和学习笔记。
 
 ## 项目如何运行
 
@@ -24,3 +24,22 @@ KamaClaude 是一个用 Python 3.12 和 asyncio 实现的本地 AI Agent 项目�
 | 全局背景、会话笔记和消息历史有什么区别？两种压缩何时生效？ | 11–12 |
 | Skill 与 MCP 如何接入？主 Agent 怎样等待和汇总子 Agent 的结果？ | 13–15 |
 | 文档如何建立索引并返回出处？怎样从运行现象定位到源码？ | 16–17 |
+
+## 运行项目
+
+使用 Python 3.12 和 uv。在仓库根目录执行 `uv sync`，复制 `.env.example` 为 `.env` 并配置模型凭据。启动 `uv run kama-core` 后，打开另一个终端，先运行 `uv run kama ping` 确认连接，再运行 `uv run kama-tui`。
+
+## 阶段分支
+
+| 分支 | 阅读重点 |
+| --- | --- |
+| [s0](https://github.com/zhouNorth/KamaClaude/tree/s0) | 项目骨架、协议与 ping |
+| [s1](https://github.com/zhouNorth/KamaClaude/tree/s1) | 模型调用与最小 Agent 循环 |
+| [s2](https://github.com/zhouNorth/KamaClaude/tree/s2) | 客户端与守护进程通信 |
+| [s3](https://github.com/zhouNorth/KamaClaude/tree/s3) | 工具调用、任务管理与 TUI |
+| [s4](https://github.com/zhouNorth/KamaClaude/tree/s4) | 多轮会话与持久化 |
+| [s5](https://github.com/zhouNorth/KamaClaude/tree/s5) | 权限审批与工具失败处理 |
+| [s6](https://github.com/zhouNorth/KamaClaude/tree/s6) | 分层记忆与上下文压缩 |
+| [s7](https://github.com/zhouNorth/KamaClaude/tree/s7) | Skill、MCP 与多 Agent 编排 |
+
+当前版本的知识库配置见 [RAG 指南](RAG.md)，开发与运行命令见 [运行手册](RUNBOOK.md)，客户端通信格式见 [协议文档](WIRE_PROTOCOL.md)。
